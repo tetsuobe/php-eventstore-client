@@ -85,4 +85,14 @@ interface EventStoreInterface
      * @return mixed
      */
     public function readProjection($name);
+
+    /**
+     * Delete projection
+     *
+     * @param $name
+     * @param bool $withCheckpoints
+     * @param bool $withStreams
+     * @return mixed
+     */
+    public function deleteProjection($name, $withCheckpoints = false, $withStreams = false);
 }

@@ -21,6 +21,8 @@ API can currently:
 
 New:
 - Create projections
+- Read projection
+- Delete projection
 
 Integrations
 ------------

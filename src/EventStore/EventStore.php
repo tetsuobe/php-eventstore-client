@@ -3,6 +3,7 @@
 namespace EventStore;
 
 use EventStore\Exception\ConnectionFailedException;
+use EventStore\Exception\InvalidCommandException;
 use EventStore\Exception\ProjectionNotFoundException;
 use EventStore\Exception\StreamDeletedException;
 use EventStore\Exception\StreamNotFoundException;
@@ -13,6 +14,7 @@ use EventStore\Http\Exception\RequestException;
 use EventStore\Http\GuzzleHttpClient;
 use EventStore\Http\HttpClientInterface;
 use EventStore\Http\ResponseCode;
+use EventStore\Projections\Command;
 use EventStore\Projections\Projection;
 use EventStore\Projections\Statistics;
 use EventStore\StreamFeed\EntryEmbedMode;
@@ -431,6 +433,37 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public function deleteProjection($name, $withCheckpoints = false, $withStreams = false)
+    {
+        if (empty($name)) {
+            throw new \InvalidArgumentException('Projection name cannot be empty.');
+        }
+
+        $this->commandProjection(Command::DISABLE, $name);
+
+        $url = $this->getUrl(EventStore::URL_PROJECTION, $name);
+        $url .= '?'.http_build_query(
+                [
+                    'deleteCheckpointStream' => $withCheckpoints ? 'yes' : 'no',
+                    'deleteStateStream' => $withStreams ? 'yes' : 'no',
+                ]
+            );
+
+        $request = new Request(
+            'DELETE',
+            $url,
+            [
+                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Content-Type' => 'application/json',
+            ]
+        );
+
+        $this->sendRequest($request);
+    }
+
+    /**
      * @param array $response
      * @return Statistics
      */
@@ -439,5 +472,28 @@ final class EventStore implements EventStoreInterface
         $statistics = new Statistics();
 
         return $statistics->create($response);
+    }
+
+    /**
+     * @param string $command
+     * @param string $name
+     * @throws InvalidCommandException
+     */
+    public function commandProjection($command, $name)
+    {
+        if (!Command::isAllowed($command)) {
+            throw new InvalidCommandException();
+        }
+
+        $url = $this->getUrl(EventStore::URL_PROJECTION, $name);
+        $request = new Request(
+            'POST',
+            $url.'/command/'.$command,
+            [
+                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Content-Type' => 'application/json',
+            ]
+        );
+        $this->sendRequest($request);
     }
 }

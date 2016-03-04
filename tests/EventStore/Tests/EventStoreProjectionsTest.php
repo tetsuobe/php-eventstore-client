@@ -69,6 +69,35 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
     }
 
     /**
+     * @test
+     * @expectedException \EventStore\Exception\ProjectionNotFoundException
+     */
+    public function delete_existing_projection()
+    {
+        $name = 'partitionProjection'.uniqid();
+        $projection = $this->prepareLinkToProjection($name);
+
+        $this->es->writeProjection($projection);
+
+        $this->es->deleteProjection($name);
+
+        $this->es->readProjection($name);
+    }
+
+    /**
+     * @test
+     * @expectedException \EventStore\Exception\ProjectionNotFoundException
+     */
+    public function delete_not_existing_projection()
+    {
+        $name = 'partitionProjection'.uniqid();
+
+        $this->es->deleteProjection($name);
+
+        $this->es->readProjection($name);
+    }
+
+    /**
      * @param string $name
      * @return Projection
      */
