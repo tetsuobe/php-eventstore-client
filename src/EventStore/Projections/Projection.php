@@ -43,6 +43,9 @@ class Projection
     {
         $this->mode = $mode;
         $this->name = $name;
+        $this->checkpoints = true;
+        $this->emit = true;
+        $this->enable = true;
     }
 
     /**
