@@ -11,7 +11,7 @@ use EventStore\StreamFeed\StreamFeedIterator;
 use EventStore\WritableEvent;
 use EventStore\WritableEventCollection;
 
-class EventStoreTest extends \PHPUnit_Framework_TestCase
+class EventStoreStreamsTest extends \PHPUnit_Framework_TestCase
 {
     /**
      * @var EventStore

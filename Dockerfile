@@ -1,0 +1,1 @@
+FROM tetsuobe/eventstore-client

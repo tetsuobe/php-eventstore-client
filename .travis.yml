@@ -1,47 +1,20 @@
-# vim: set tabstop=2 shiftwidth=2 expandtab:
-language: php
+sudo: required
 
-php:
-  - 5.5
-  - 5.6
-  - 7.0
-  - hhvm
-
-env:
-  - EVENT_STORE_VERSION='Linux-v3.0.5' EVENT_STORE_DAEMON='clusternode'
-  - EVENT_STORE_VERSION='Ubuntu-v3.1.0' EVENT_STORE_DAEMON='eventstored'
-  - EVENT_STORE_VERSION='Ubuntu-v3.2.2' EVENT_STORE_DAEMON='eventstored'
-
-sudo: false
-
-matrix:
-  allow_failures:
-    - php: hhvm
-
-cache:
-  directories:
-    - $HOME/downloads
-    - $HOME/composer/.cache
-    - $HOME/build/dbellettini/php-eventstore-client/vendor
-    - $HOME/build/dbellettini/php-eventstore-client/bin
+services:
+  - docker
 
 before_install:
-  - travis/download-eventstore.sh ${EVENT_STORE_VERSION}
-  - travis/download-ocular.sh
-  - tar xf $HOME/downloads/EventStore-OSS-${EVENT_STORE_VERSION}.tar.gz
-  - cd EventStore* && ./${EVENT_STORE_DAEMON} --mem-db 2>&1> ~/eventstore.log &
-install:
-  - composer install --prefer-dist --no-interaction
+  - docker-compose up -d
 
-before_script:
-  - while [ `grep 'IS MASTER' ~/eventstore.log | wc -l` -eq 0 ]; do sleep 1; done
+install:
+  - docker exec -it phpeventstoreclient_php_1 bash -c "cd /var/www && composer install --prefer-dist --no-interaction"
 
 script:
-  - bin/phpunit --coverage-clover=coverage.clover --coverage-text --testdox
+  - docker exec -it phpeventstoreclient_php_1 bash -c "cd /var/www && bin/phpunit --coverage-clover=coverage.clover --coverage-text --testdox"
 
 after_success:
-  - php ~/ocular.phar code-coverage:upload --format=php-clover coverage.clover
+  - docker exec -it phpeventstoreclient_php_1 bash -c "cd /var/www && wget https://scrutinizer-ci.com/ocular.phar"
+  - docker exec -it phpeventstoreclient_php_1 bash -c "cd /var/www && php ocular.phar code-coverage:upload --format=php-clover coverage.clover"
 
 after_scripts:
   - killall -SIGINT clusternode
-  - cat ~/eventstore.log

@@ -2,11 +2,12 @@
 
 namespace EventStore;
 
+use EventStore\Projections\Projection;
 use EventStore\StreamFeed\EntryEmbedMode;
 use EventStore\StreamFeed\Event;
-use EventStore\StreamFeed\LinkRelation;
 use EventStore\StreamFeed\StreamFeed;
 use EventStore\StreamFeed\StreamFeedIterator;
+use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
@@ -15,15 +16,6 @@ use Psr\Http\Message\ResponseInterface;
  */
 interface EventStoreInterface
 {
-    /**
-     * Navigate stream feed through link relations
-     *
-     * @param  StreamFeed      $streamFeed The stream feed to navigate through
-     * @param  LinkRelation    $relation   The "direction" expressed as link relation
-     * @return null|StreamFeed
-     */
-    public function navigateStreamFeed(StreamFeed $streamFeed, LinkRelation $relation);
-
     /**
      * Get the response from the last HTTP call to the EventStore API
      *
@@ -77,4 +69,30 @@ interface EventStoreInterface
      * @return StreamFeedIterator
      */
     public function backwardStreamFeedIterator($streamName);
+
+    /**
+     * Write projection
+     *
+     * @param Projection $projection
+     * @return mixed
+     */
+    public function writeProjection(Projection $projection);
+
+    /**
+     * Read projection
+     *
+     * @param $name
+     * @return mixed
+     */
+    public function readProjection($name);
+
+    /**
+     * Delete projection
+     *
+     * @param $name
+     * @param bool $withCheckpoints
+     * @param bool $withStreams
+     * @return mixed
+     */
+    public function deleteProjection($name, $withCheckpoints = false, $withStreams = false);
 }
