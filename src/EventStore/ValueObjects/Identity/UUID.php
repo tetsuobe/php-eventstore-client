@@ -6,7 +6,7 @@ use EventStore\ValueObjects\Exception\InvalidNativeArgumentException;
 use EventStore\ValueObjects\StringLiteral\StringLiteral;
 use EventStore\ValueObjects\Util\Util;
 use EventStore\ValueObjects\ValueObjectInterface;
-use Rhumsaa\Uuid\Uuid as BaseUuid;
+use Ramsey\Uuid\Uuid as BaseUUid;
 
 class UUID extends StringLiteral
 {
@@ -14,9 +14,8 @@ class UUID extends StringLiteral
     protected $value;
 
     /**
-     * @param  string                                                 $uuid
      * @return UUID
-     * @throws \ValueObjects\Exception\InvalidNativeArgumentException
+     * @internal param string $uuid
      */
     public static function fromNative()
     {

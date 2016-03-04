@@ -1,7 +1,7 @@
 <?php
 namespace EventStore\Http;
 
-use Doctrine\Common\Cache\ApcCache;
+use Doctrine\Common\Cache\ApcuCache;
 use Doctrine\Common\Cache\Cache;
 use Exception as PhpException;
 use GuzzleHttp\Client;
@@ -19,6 +19,11 @@ use Doctrine\Common\Cache\FilesystemCache;
 
 final class GuzzleHttpClient implements HttpClientInterface
 {
+    /**
+     * @var Client
+     */
+    private $client;
+
     public function __construct(ClientInterface $client = null)
     {
         $this->client = $client ?: new Client([
@@ -36,7 +41,7 @@ final class GuzzleHttpClient implements HttpClientInterface
     public static function withApcCache()
     {
         return self::withDoctrineCache(
-            new ApcCache()
+            new ApcuCache()
         );
     }
 
@@ -78,10 +83,10 @@ final class GuzzleHttpClient implements HttpClientInterface
         return $responses;
     }
 
-    public function send(RequestInterface $request)
+    public function send(RequestInterface $request, array $options = [])
     {
         try {
-            return $this->client->send($request);
+            return $this->client->send($request, $options);
         } catch (GuzzleClientException $e) {
             throw new Exception\ClientException($e->getMessage(), $e->getCode(), $e);
         } catch (GuzzleRequestException $e) {
