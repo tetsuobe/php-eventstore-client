@@ -1,5 +1,5 @@
 {
-    "name": "dbellettini/eventstore-client",
+    "name": "tetsuobe/eventstore-client",
     "description": "EventStore client for PHP",
     "type": "library",
     "keywords": [
@@ -19,28 +19,32 @@
             "homepage": "http://nicolopignatelli.me/"
         },
         {
+            "name": "Remigiusz Specht",
+            "email": "tetsuobe@gmail.com",
+            "homepage": "http://nicolopignatelli.me/"
+        },
+        {
             "name": "Contributors",
             "homepage": "https://github.com/dbellettini/php-eventstore-client/graphs/contributors"
         }
     ],
     "require": {
-        "php": ">=5.5.0",
+        "php": ">=5.6.0",
         "guzzlehttp/psr7": "~1.2",
-        "ramsey/uuid": "~2.8",
-        "marc-mabe/php-enum": "~2.1"
+        "ramsey/uuid": "~3.2",
+        "marc-mabe/php-enum": "~2.2"
     },
     "require-dev": {
-        "guzzlehttp/guzzle": "~6.0",
-        "phpunit/phpunit": "~4.0",
-        "kevinrob/guzzle-cache-middleware": "^0.7.1",
-        "doctrine/cache": "~1.4"
+        "guzzlehttp/guzzle": "~6.1",
+        "phpunit/phpunit": "~5.2",
+        "kevinrob/guzzle-cache-middleware": "~1.1",
+        "doctrine/cache": "~1.6"
     },
     "suggest": {
         "guzzlehttp/guzzle": "Default PSR-7 implementation",
         "kevinrob/guzzle-cache-middleware": "Cache HTTP requests",
         "doctrine/cache": "Use Doctrine to cache HTTP requests",
-        "dbellettini/broadway-eventstore": "Integrate Event Store with Broadway",
-        "dbellettini/eventstore-client-bundle": "Integrate Event Store with Symfony 2"
+        "tetsuobe/eventstore-client-bundle": "Integrate Event Store with Symfony 2 and Symfony 3"
     },
     "config": {
         "bin-dir": "bin"

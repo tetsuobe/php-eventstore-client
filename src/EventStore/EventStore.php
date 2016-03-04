@@ -3,6 +3,7 @@
 namespace EventStore;
 
 use EventStore\Exception\ConnectionFailedException;
+use EventStore\Exception\ProjectionNotFoundException;
 use EventStore\Exception\StreamDeletedException;
 use EventStore\Exception\StreamNotFoundException;
 use EventStore\Exception\UnauthorizedException;
@@ -12,6 +13,8 @@ use EventStore\Http\Exception\RequestException;
 use EventStore\Http\GuzzleHttpClient;
 use EventStore\Http\HttpClientInterface;
 use EventStore\Http\ResponseCode;
+use EventStore\Projections\Projection;
+use EventStore\Projections\Statistics;
 use EventStore\StreamFeed\EntryEmbedMode;
 use EventStore\StreamFeed\Event;
 use EventStore\StreamFeed\LinkRelation;
@@ -28,13 +31,17 @@ use Psr\Http\Message\ResponseInterface;
  */
 final class EventStore implements EventStoreInterface
 {
+    const URL_STREAMS = 'streams';
+    const URL_PROJECTION = 'projection';
+    const URL_PROJECTIONS = 'projections';
+
     /**
      * @var string
      */
     private $url;
 
     /**
-     * @var Client
+     * @var HttpClientInterface
      */
     private $httpClient;
 
@@ -50,7 +57,7 @@ final class EventStore implements EventStoreInterface
 
     /**
      * @param string $url Endpoint of the EventStore HTTP API
-     * @param HttpClientInterface the http client
+     * @param HttpClientInterface $httpClient the http client
      */
     public function __construct($url, HttpClientInterface $httpClient = null)
     {
@@ -64,12 +71,12 @@ final class EventStore implements EventStoreInterface
     /**
      * Delete a stream
      *
-     * @param string         $streamName Name of the stream
-     * @param StreamDeletion $mode       Deletion mode (soft or hard)
+     * @param string $streamName Name of the stream
+     * @param StreamDeletion $mode Deletion mode (soft or hard)
      */
     public function deleteStream($streamName, StreamDeletion $mode)
     {
-        $request = new Request('DELETE', $this->getStreamUrl($streamName));
+        $request = new Request('DELETE', $this->getUrl(EventStore::URL_STREAMS, $streamName));
 
         if ($mode == StreamDeletion::HARD) {
             $request = $request->withHeader('ES-HardDelete', 'true');
@@ -91,8 +98,8 @@ final class EventStore implements EventStoreInterface
     /**
      * Navigate stream feed through link relations
      *
-     * @param  StreamFeed      $streamFeed The stream feed to navigate through
-     * @param  LinkRelation    $relation   The "direction" expressed as link relation
+     * @param  StreamFeed $streamFeed The stream feed to navigate through
+     * @param  LinkRelation $relation The "direction" expressed as link relation
      * @return null|StreamFeed
      */
     public function navigateStreamFeed(StreamFeed $streamFeed, LinkRelation $relation)
@@ -109,13 +116,13 @@ final class EventStore implements EventStoreInterface
     /**
      * Open a stream feed for read and navigation
      *
-     * @param  string         $streamName The stream name
-     * @param  EntryEmbedMode $embedMode  The event entries embed mode (none, rich or body)
+     * @param  string $streamName The stream name
+     * @param  EntryEmbedMode $embedMode The event entries embed mode (none, rich or body)
      * @return StreamFeed
      */
     public function openStreamFeed($streamName, EntryEmbedMode $embedMode = null)
     {
-        $url = $this->getStreamUrl($streamName);
+        $url = $this->getUrl(EventStore::URL_STREAMS, $streamName);
 
         return $this->readStreamFeed($url, $embedMode);
     }
@@ -141,7 +148,7 @@ final class EventStore implements EventStoreInterface
     /**
      * Read a single event
      *
-     * @param  string $eventUrl The url of the event
+     * @param array $eventUrls The url of the event
      * @return Event
      */
     public function readEventBatch(array $eventUrls)
@@ -160,8 +167,7 @@ final class EventStore implements EventStoreInterface
                 return $this
                     ->createEventFromResponseContent(
                         json_decode($response->getBody(), true)['content']
-                    )
-                ;
+                    );
             },
             $responses
         );
@@ -174,7 +180,7 @@ final class EventStore implements EventStoreInterface
     protected function createEventFromResponseContent(array $content)
     {
         $type = $content['eventType'];
-        $version = (integer) $content['eventNumber'];
+        $version = (integer)$content['eventNumber'];
         $data = $content['data'];
         $metadata = (!empty($content['metadata'])) ? $content['metadata'] : null;
 
@@ -184,9 +190,9 @@ final class EventStore implements EventStoreInterface
     /**
      * Write one or more events to a stream
      *
-     * @param  string                                  $streamName      The stream name
-     * @param  WritableToStream                        $events          Single event or a collection of events
-     * @param  int                                     $expectedVersion The expected version of the stream
+     * @param  string $streamName The stream name
+     * @param  WritableToStream $events Single event or a collection of events
+     * @param  int $expectedVersion The expected version of the stream
      * @throws Exception\WrongExpectedVersionException
      */
     public function writeToStream($streamName, WritableToStream $events, $expectedVersion = ExpectedVersion::ANY)
@@ -197,7 +203,7 @@ final class EventStore implements EventStoreInterface
 
         $request = new Request(
             'POST',
-            $this->getStreamUrl($streamName),
+            $this->getUrl(EventStore::URL_STREAMS, $streamName),
             [
                 'ES-ExpectedVersion' => intval($expectedVersion),
                 'Content-Type' => 'application/vnd.eventstore.events+json',
@@ -215,7 +221,7 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
-     * @param  string             $streamName
+     * @param  string $streamName
      * @return StreamFeedIterator
      */
     public function forwardStreamFeedIterator($streamName)
@@ -224,7 +230,7 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
-     * @param  string             $streamName
+     * @param  string $streamName
      * @return StreamFeedIterator
      */
     public function backwardStreamFeedIterator($streamName)
@@ -255,8 +261,8 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
-     * @param  string                            $streamUrl
-     * @param  EntryEmbedMode                    $embedMode
+     * @param  string $streamUrl
+     * @param  EntryEmbedMode $embedMode
      * @return StreamFeed
      * @throws Exception\StreamDeletedException
      * @throws Exception\StreamNotFoundException
@@ -283,39 +289,41 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
-     * @param  string                                       $uri
-     * @return \GuzzleHttp\Message\Request|RequestInterface
+     * @param  string $uri
+     * @return Request|RequestInterface
      */
-    private function getJsonRequest($uri)
+    protected function getJsonRequest($uri)
     {
         return new Request(
             'GET',
             $uri,
             [
-                'Accept' => 'application/vnd.eventstore.atom+json'
+                'Accept' => 'application/vnd.eventstore.atom+json',
             ]
         );
     }
 
     /**
      * @param RequestInterface $request
+     * @param array $options
+     * @return ResponseInterface|void
      */
-    private function sendRequest(RequestInterface $request)
+    protected function sendRequest(RequestInterface $request, array $options = [])
     {
         try {
-            $this->lastResponse = $this->httpClient->send($request);
+            $this->lastResponse = $this->httpClient->send($request, $options);
         } catch (ClientException $e) {
             $this->lastResponse = $e->getResponse();
         }
     }
 
     /**
-     * @param  string                            $streamUrl
+     * @param  string $streamUrl
      * @throws Exception\StreamDeletedException
      * @throws Exception\StreamNotFoundException
      * @throws Exception\UnauthorizedException
      */
-    private function ensureStatusCodeIsGood($streamUrl)
+    protected function ensureStatusCodeIsGood($streamUrl)
     {
         $code = $this->lastResponse->getStatusCode();
 
@@ -324,40 +332,112 @@ final class EventStore implements EventStoreInterface
         }
     }
 
+    /**
+     *
+     */
     private function initBadCodeHandlers()
     {
         $this->badCodeHandlers = [
             ResponseCode::HTTP_NOT_FOUND => function ($streamUrl) {
-                    throw new StreamNotFoundException(
-                        sprintf(
-                            'No stream found at %s',
-                            $streamUrl
-                        )
-                    );
-                },
+                throw new StreamNotFoundException(
+                    sprintf(
+                        'No stream found at %s',
+                        $streamUrl
+                    )
+                );
+            },
 
             ResponseCode::HTTP_GONE => function ($streamUrl) {
-                    throw new StreamDeletedException(
-                        sprintf(
-                            'Stream at %s has been permanently deleted',
-                            $streamUrl
-                        )
-                    );
-                },
+                throw new StreamDeletedException(
+                    sprintf(
+                        'Stream at %s has been permanently deleted',
+                        $streamUrl
+                    )
+                );
+            },
 
             ResponseCode::HTTP_UNAUTHORIZED => function ($streamUrl) {
-                    throw new UnauthorizedException(
-                        sprintf(
-                            'Tried to open stream %s got 401',
-                            $streamUrl
-                        )
-                    );
-                }
+                throw new UnauthorizedException(
+                    sprintf(
+                        'Tried to open stream %s got 401',
+                        $streamUrl
+                    )
+                );
+            },
         ];
     }
 
-    private function lastResponseAsJson()
+    /**
+     * @return mixed
+     */
+    protected function lastResponseAsJson()
     {
         return json_decode($this->lastResponse->getBody(), true);
+    }
+
+    /**
+     * @param string $path
+     * @param string $params
+     * @return string
+     * @internal param string $name
+     */
+    protected function getUrl($path, $params)
+    {
+        return sprintf('%s/%s/%s', $this->url, $path, $params);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function writeProjection(Projection $projection)
+    {
+        $request = new Request(
+            'POST',
+            $this->getUrl(EventStore::URL_PROJECTIONS, $projection->getUrlParams()),
+            [
+                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Content-Type' => 'application/json',
+            ],
+            json_encode($projection->getBody())
+        );
+
+        $this->sendRequest($request);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function readProjection($name)
+    {
+        if (empty($name)) {
+            throw new \InvalidArgumentException('Projection name cannot be empty.');
+        }
+
+        $url = $this->getUrl(EventStore::URL_PROJECTION, $name);
+        $request = new Request(
+            'GET',
+            $url
+        );
+
+        $this->sendRequest($request);
+
+        if ($this->getLastResponse()->getStatusCode() == ResponseCode::HTTP_NOT_FOUND) {
+            throw new ProjectionNotFoundException();
+        }
+
+        $this->ensureStatusCodeIsGood($url);
+
+        return $this->createStatisticsFromResponse($this->lastResponseAsJson());
+    }
+
+    /**
+     * @param array $response
+     * @return Statistics
+     */
+    private function createStatisticsFromResponse(array $response)
+    {
+        $statistics = new Statistics();
+
+        return $statistics->create($response);
     }
 }
