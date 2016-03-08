@@ -254,6 +254,14 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
+     * @return string
+     */
+    protected function getAuthorizationKey()
+    {
+        return 'Basic '.base64_encode('admin:changeit');
+    }
+
+    /**
      * @param  string $streamName
      * @return string
      */
@@ -391,16 +399,20 @@ final class EventStore implements EventStoreInterface
     /**
      * {@inheritdoc}
      */
-    public function writeProjection(Projection $projection)
+    public function writeProjection(Projection $projection, $force = false)
     {
+        if ($force) {
+            $this->deleteProjection($projection->getName());
+        }
+
         $request = new Request(
             'POST',
             $this->getUrl(EventStore::URL_PROJECTIONS, $projection->getUrlParams()),
             [
-                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Authorization' => $this->getAuthorizationKey(),
                 'Content-Type' => 'application/json',
             ],
-            json_encode($projection->getBody())
+            $projection->getBody()
         );
 
         $this->sendRequest($request);
@@ -455,7 +467,7 @@ final class EventStore implements EventStoreInterface
             'DELETE',
             $url,
             [
-                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Authorization' => $this->getAuthorizationKey(),
                 'Content-Type' => 'application/json',
             ]
         );
@@ -490,10 +502,35 @@ final class EventStore implements EventStoreInterface
             'POST',
             $url.'/command/'.$command,
             [
-                'Authorization' => 'Basic '.base64_encode('admin:changeit'),
+                'Authorization' => $this->getAuthorizationKey(),
                 'Content-Type' => 'application/json',
             ]
         );
         $this->sendRequest($request);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function updateProjection(Projection $projection, $reset = false)
+    {
+        $url = $this->getUrl(
+            EventStore::URL_PROJECTION,
+            $projection->getUrlQuery(['emit' => $projection->isEmit() ? 'yes' : 'no'])
+        );
+        $request = new Request(
+            'PUT',
+            $url,
+            [
+                'Authorization' => $this->getAuthorizationKey(),
+                'Content-Type' => 'application/json',
+            ],
+            $projection->getBody()
+        );
+        $this->sendRequest($request);
+
+        if ($reset) {
+            $this->commandProjection(Command::RESET(), $projection->getName());
+        }
     }
 }

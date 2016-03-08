@@ -73,6 +73,14 @@ class Projection
     }
 
     /**
+     * @return array
+     */
+    public function getUrlQuery($params = [])
+    {
+        return $this->getName().'/query?'.http_build_query($params);
+    }
+
+    /**
      * @return string
      */
     public function getMode()

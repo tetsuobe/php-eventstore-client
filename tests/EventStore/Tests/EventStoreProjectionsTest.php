@@ -5,6 +5,7 @@ namespace EventStore\Tests;
 use EventStore\EventStore;
 use EventStore\Projections\Projection;
 use EventStore\Projections\RunMode;
+use EventStore\Projections\Statistics;
 
 class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
 {
@@ -41,6 +42,19 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
         $this->es->writeProjection($projection);
 
         $this->assertEquals('409', $this->es->getLastResponse()->getStatusCode());
+    }
+
+    /**
+     * @test
+     */
+    public function force_create_continuous_partition_projection()
+    {
+        $projection = $this->prepareLinkToProjection('partitionProjection'.uniqid());
+
+        $this->es->writeProjection($projection);
+        $this->es->writeProjection($projection, true);
+
+        $this->assertEquals('201', $this->es->getLastResponse()->getStatusCode());
     }
 
     /**
@@ -108,13 +122,70 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
         }
 
         $projection = new Projection(RunMode::CONTINUOUS(), $name);
-        $projection->setBody('fromStream(\'someStream\')
+        $projection->setBody(
+            'fromStream(\'someStream\')
             .when({
               $any:function(state, event) {
                 linkTo(\'category-\' + event.data.id, event)
               }
-            });');
+            });'
+        );
 
         return $projection;
+    }
+
+    /**
+     * @test
+     */
+    public function update_existing_projection()
+    {
+        $name = 'partitionProjection'.uniqid();
+        $projection = $this->prepareLinkToProjection($name);
+
+        $this->es->writeProjection($projection);
+
+        /** @var Statistics $responseOne */
+        $responseOne = $this->es->readProjection($name);
+
+        $projection->setEmit(false);
+        $projection->setBody(
+            'fromStream(\'someOtherStream\')
+                .when({
+                  $any:function(state, event) {
+                    linkTo(\'type-\' + event.data.type, event)
+                  }
+                });'
+        );
+
+        $this->es->updateProjection($projection);
+
+        sleep(1);
+        /** @var Statistics $responseTwo */
+        $responseTwo = $this->es->readProjection($name);
+
+        $this->assertEquals('200', $this->es->getLastResponse()->getStatusCode());
+        $this->assertTrue($responseTwo->getVersion() == $responseOne->getVersion() + 1, 'Projection was not updated');
+    }
+
+    /**
+     * @test
+     */
+    public function update_not_existing_projection()
+    {
+        $name = 'partitionProjection'.uniqid();
+        $projection = $this->prepareLinkToProjection($name);
+
+        $projection->setEmit(false);
+        $projection->setBody(
+            'fromStream(\'someOtherStream\')
+            .when({
+              $any:function(state, event) {
+                linkTo(\'type-\' + event.data.aggregateId, event)
+              }
+            });');
+
+        $this->es->updateProjection($projection);
+
+        $this->assertEquals('404', $this->es->getLastResponse()->getStatusCode());
     }
 }
