@@ -74,9 +74,10 @@ interface EventStoreInterface
      * Write projection
      *
      * @param Projection $projection
+     * @param bool $force
      * @return mixed
      */
-    public function writeProjection(Projection $projection);
+    public function writeProjection(Projection $projection, $force = false);
 
     /**
      * Read projection
@@ -95,4 +96,13 @@ interface EventStoreInterface
      * @return mixed
      */
     public function deleteProjection($name, $withCheckpoints = false, $withStreams = false);
+
+    /**
+     * Update existing projection
+     *
+     * @param Projection $projection
+     * @param bool $reset
+     * @return mixed
+     */
+    public function updateProjection(Projection $projection, $reset = false);
 }

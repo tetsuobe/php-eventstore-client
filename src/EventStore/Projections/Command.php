@@ -8,10 +8,12 @@ final class Command extends Enum
 {
     const ENABLE = 'enable';
     const DISABLE = 'disable';
+    const RESET = 'reset';
 
     private static $allowedCommand = [
         self::ENABLE,
         self::DISABLE,
+        self::RESET,
     ];
 
     public static function isAllowed($command)

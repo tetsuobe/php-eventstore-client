@@ -22,7 +22,13 @@ API can currently:
 New:
 - Create projections
 - Read projection
+- Update projection
 - Delete projection
+- Commands:
+    - enable
+    - disable
+    - reset
+
 
 Integrations
 ------------

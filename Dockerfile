@@ -1,1 +1,1 @@
-FROM tetsuobe/eventstore-client
+FROM tetsuobe/eventstore-client:inmemory
