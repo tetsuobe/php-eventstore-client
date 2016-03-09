@@ -17,6 +17,7 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
     protected function setUp()
     {
         $this->es = new EventStore('http://127.0.0.1:2113');
+        $this->es->setAuthorization('admin', 'changeit');
     }
 
     /**
