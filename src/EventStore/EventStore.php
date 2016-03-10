@@ -4,6 +4,7 @@ namespace EventStore;
 
 use EventStore\Exception\ConnectionFailedException;
 use EventStore\Exception\InvalidCommandException;
+use EventStore\Exception\InvalidCredentials;
 use EventStore\Exception\ProjectionNotFoundException;
 use EventStore\Exception\StreamDeletedException;
 use EventStore\Exception\StreamNotFoundException;
@@ -56,6 +57,11 @@ final class EventStore implements EventStoreInterface
      * @var array
      */
     private $badCodeHandlers = [];
+
+    /**
+     * @var string
+     */
+    private $authKey;
 
     /**
      * @param string $url Endpoint of the EventStore HTTP API
@@ -254,20 +260,24 @@ final class EventStore implements EventStoreInterface
     }
 
     /**
+     * @param string $user
+     * @param string $password
+     * @throws InvalidCredentials
+     */
+    public function setAuthorization($user, $password)
+    {
+        if (empty($user) || empty($password)) {
+            throw new InvalidCredentials();
+        }
+        $this->authKey = $user.':'.$password;
+    }
+
+    /**
      * @return string
      */
     protected function getAuthorizationKey()
     {
-        return 'Basic '.base64_encode('admin:changeit');
-    }
-
-    /**
-     * @param  string $streamName
-     * @return string
-     */
-    private function getStreamUrl($streamName)
-    {
-        return sprintf('%s/streams/%s', $this->url, $streamName);
+        return 'Basic '.base64_encode($this->authKey);
     }
 
     /**
