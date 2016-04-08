@@ -34,6 +34,7 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
 
     /**
      * @test
+     * @expectedException \EventStore\Exception\ProjectionAlreadyExistsException
      */
     public function create_duplicated_continuous_partition_projection()
     {
@@ -41,8 +42,6 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
 
         $this->es->writeProjection($projection);
         $this->es->writeProjection($projection);
-
-        $this->assertEquals('409', $this->es->getLastResponse()->getStatusCode());
     }
 
     /**
@@ -55,7 +54,7 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
         $this->es->writeProjection($projection);
         $this->es->writeProjection($projection, true);
 
-        $this->assertEquals('201', $this->es->getLastResponse()->getStatusCode());
+        $this->assertEquals('200', $this->es->getLastResponse()->getStatusCode());
     }
 
     /**
@@ -170,6 +169,7 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
 
     /**
      * @test
+     * @expectedException \EventStore\Exception\ProjectionNotFoundException
      */
     public function update_not_existing_projection()
     {
@@ -186,7 +186,5 @@ class EventStoreProjectionsTest extends \PHPUnit_Framework_TestCase
             });');
 
         $this->es->updateProjection($projection);
-
-        $this->assertEquals('404', $this->es->getLastResponse()->getStatusCode());
     }
 }
