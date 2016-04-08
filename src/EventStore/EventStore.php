@@ -5,6 +5,7 @@ namespace EventStore;
 use EventStore\Exception\ConnectionFailedException;
 use EventStore\Exception\InvalidCommandException;
 use EventStore\Exception\InvalidCredentials;
+use EventStore\Exception\ProjectionAlreadyExistsException;
 use EventStore\Exception\ProjectionNotFoundException;
 use EventStore\Exception\StreamDeletedException;
 use EventStore\Exception\StreamNotFoundException;
@@ -62,6 +63,11 @@ final class EventStore implements EventStoreInterface
      * @var string
      */
     private $authKey;
+
+    /**
+     * @var Statistics
+     */
+    private $projectionStatistics;
 
     /**
      * @param string $url Endpoint of the EventStore HTTP API
@@ -411,21 +417,36 @@ final class EventStore implements EventStoreInterface
      */
     public function writeProjection(Projection $projection, $force = false)
     {
-        if ($force) {
-            $this->deleteProjection($projection->getName());
+        try {
+            $this->projectionStatistics = $this->readProjection($projection->getName());
+        } catch (ProjectionNotFoundException $e) {
+            $request = new Request(
+                'POST',
+                $this->getUrl(EventStore::URL_PROJECTIONS, $projection->getUrlParams()),
+                [
+                    'Authorization' => $this->getAuthorizationKey(),
+                    'Content-Type' => 'application/json',
+                ],
+                $projection->getBody()
+            );
+
+            $this->sendRequest($request);
+
+            if ($this->getLastResponse()->getStatusCode() != ResponseCode::HTTP_CREATED) {
+                throw new \Exception(
+                    'Error! Projection was not created.',
+                    $this->getLastResponse()->getStatusCode()
+                );
+            }
+
+            return 'Success! Projection was created.';
         }
 
-        $request = new Request(
-            'POST',
-            $this->getUrl(EventStore::URL_PROJECTIONS, $projection->getUrlParams()),
-            [
-                'Authorization' => $this->getAuthorizationKey(),
-                'Content-Type' => 'application/json',
-            ],
-            $projection->getBody()
-        );
-
-        $this->sendRequest($request);
+        if (!$force) {
+            throw new ProjectionAlreadyExistsException();
+        } else {
+            return $this->updateProjection($projection, true);
+        }
     }
 
     /**
@@ -463,6 +484,8 @@ final class EventStore implements EventStoreInterface
             throw new \InvalidArgumentException('Projection name cannot be empty.');
         }
 
+        $this->readProjection($name);
+
         $this->commandProjection(Command::DISABLE, $name);
 
         $url = $this->getUrl(EventStore::URL_PROJECTION, $name);
@@ -483,6 +506,13 @@ final class EventStore implements EventStoreInterface
         );
 
         $this->sendRequest($request);
+
+        if ($this->getLastResponse()->getStatusCode() != ResponseCode::HTTP_OK) {
+            throw new \Exception(
+                'Error! Projection was not deleted.',
+                $this->getLastResponse()->getStatusCode()
+            );
+        }
     }
 
     /**
@@ -500,6 +530,7 @@ final class EventStore implements EventStoreInterface
      * @param string $command
      * @param string $name
      * @throws InvalidCommandException
+     * @throws \Exception
      */
     public function commandProjection($command, $name)
     {
@@ -517,6 +548,13 @@ final class EventStore implements EventStoreInterface
             ]
         );
         $this->sendRequest($request);
+
+        if ($this->getLastResponse()->getStatusCode() != ResponseCode::HTTP_OK) {
+            throw new \Exception(
+                'Error! Command \''.$command.'\' was not executed.',
+                $this->getLastResponse()->getStatusCode()
+            );
+        }
     }
 
     /**
@@ -524,6 +562,10 @@ final class EventStore implements EventStoreInterface
      */
     public function updateProjection(Projection $projection, $reset = false)
     {
+        if (empty($this->projectionStatistics) || $projection != $this->projectionStatistics) {
+            $this->readProjection($projection->getName());
+        }
+
         $url = $this->getUrl(
             EventStore::URL_PROJECTION,
             $projection->getUrlQuery(['emit' => $projection->isEmit() ? 'yes' : 'no'])
@@ -537,10 +579,17 @@ final class EventStore implements EventStoreInterface
             ],
             $projection->getBody()
         );
+
         $this->sendRequest($request);
 
+        if ($this->getLastResponse()->getStatusCode() != ResponseCode::HTTP_OK) {
+            throw new \Exception('Error! Projection was not updated.', $this->getLastResponse()->getStatusCode());
+        }
+
         if ($reset) {
+            $this->commandProjection(Command::DISABLE(), $projection->getName());
             $this->commandProjection(Command::RESET(), $projection->getName());
+            $this->commandProjection(Command::ENABLE(), $projection->getName());
         }
     }
 }
